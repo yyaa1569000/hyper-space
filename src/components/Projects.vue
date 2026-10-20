@@ -44,14 +44,6 @@
 
           <div class="flex gap-4 font-mono text-xs">
             <a 
-              :href="project.github" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              class="px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
-            >
-              GitHub Code
-            </a>
-            <a 
               :href="project.demo" 
               target="_blank" 
               rel="noopener noreferrer" 

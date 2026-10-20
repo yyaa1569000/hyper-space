@@ -17,7 +17,7 @@ export const projectsData = [
     title: 'HYPER-SPACE 互動式控制中心',
     subtitle: 'Cyberpunk Portfolio & Interactive System',
     tags: ['Vue 3', 'Tailwind CSS', 'GSAP', 'Vite'],
-    description: '本個人形象網站，具備 Cmd+K 搜尋指令、互動式技能架構圖與微特效。',
+    description: '本個人形象網站，具備 Ctrl+K 搜尋指令、互動式技能架構圖與微特效。',
     highlights: [
       '元件化架構設計，資料與介面徹底解耦',
       '整合 Web Keyboard API 與動態動畫引擎',
