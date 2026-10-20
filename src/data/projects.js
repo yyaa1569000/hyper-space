@@ -3,7 +3,7 @@ export const projectsData = [
     id: 'teamlog',
     title: '團隊日誌系統 (TeamLog)',
     subtitle: 'Enterprise Team Activity & Log Tracking System',
-    tags: ['Java Spring', 'Hibernate', 'PostgreSQL', 'Render', 'Vue 3'],
+    tags: ['Spring Boot', 'Hibernate', 'PostgreSQL', 'Render', 'Vue 3'],
     description: '專為團隊協作設計的日誌與進度追蹤平台，整合權限控管與高效能資料庫查詢。',
     highlights: [
       '使用 Java Spring Boot 架構 RESTful API API 模組',
