@@ -3,9 +3,10 @@
     <Transition name="fade">
       <div 
         v-if="isOpen" 
-        class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 font-mono"
+        class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 font-mono select-none"
         @click.self="close"
       >
+        <!-- Modal 主體視窗容器 -->
         <div class="w-full max-w-md bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden relative">
           
           <!-- 頂部遊戲切換 Tab -->
@@ -50,13 +51,13 @@
           </div>
 
           <!-- 遊戲 Canvas 畫布 -->
-          <div class="p-4 flex justify-center bg-slate-950/90 relative">
-            <canvas ref="canvasRef" width="300" height="300" class="border border-slate-800 rounded-lg bg-slate-950 select-none"></canvas>
+          <div class="p-4 flex justify-center bg-slate-950/90 relative overflow-hidden">
+            <canvas ref="canvasRef" width="300" height="300" class="border border-slate-800 rounded-lg bg-slate-950"></canvas>
 
             <!-- 遮罩：未開始 / Game Over -->
             <div 
               v-if="!isPlaying" 
-              class="absolute inset-0 m-4 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg text-center p-6"
+              class="absolute inset-0 m-4 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg text-center p-6 z-20"
             >
               <p v-if="isGameOver" class="text-red-400 font-bold text-xl mb-2">GAME OVER</p>
               <p v-else class="text-cyan-400 font-bold text-xl mb-2">{{ gameTitle }}</p>
@@ -74,8 +75,8 @@
             </div>
           </div>
 
-          <!-- 方向控制器 / 操作提示 (支援按住不放長按) -->
-          <div class="p-3 bg-slate-950/60 border-t border-slate-800 flex justify-center text-center select-none">
+          <!-- 方向控制器 / 操作提示 -->
+          <div class="p-3 bg-slate-950/60 border-t border-slate-800 flex justify-center text-center">
             <div v-if="activeGame === 'snake'" class="grid grid-cols-3 gap-1.5 w-32">
               <div></div>
               <button @click="handleSnakeDir('UP')" class="p-1.5 bg-slate-800 rounded text-xs text-slate-300">▲</button>
@@ -128,6 +129,28 @@
             </div>
           </div>
 
+          <!-- 💥 全覆蓋滿版巨型彩蛋 (跳出時同步結束遊戲) -->
+          <Transition name="pop">
+            <div 
+              v-if="showPopupImage" 
+              class="absolute inset-0 flex flex-col items-center justify-between bg-slate-950/95 backdrop-blur-md z-50 cursor-pointer p-4 pt-8 pb-5"
+              @click="showPopupImage = false"
+            >
+              <div class="relative flex-1 flex items-center justify-center w-full min-h-0">
+                <div class="absolute w-72 h-72 bg-cyan-500/35 rounded-full blur-3xl animate-pulse"></div>
+                <img 
+                  src="/popup.png" 
+                  alt="Surprise!" 
+                  class="w-full h-full max-h-[310px] object-contain relative z-10 drop-shadow-[0_0_35px_rgba(0,242,254,0.9)] animate-pulse"
+                />
+              </div>
+
+              <span class="mt-2 text-cyan-300 font-bold text-xs tracking-wider bg-slate-950/95 px-4 py-2 rounded-full border border-cyan-500/80 shadow-2xl relative z-20 text-center shrink-0">
+                ⚠️ 系統提示：別再玩了，快發 Offer 給這個優秀的工程師！(點擊關閉)
+              </span>
+            </div>
+          </Transition>
+
         </div>
       </div>
     </Transition>
@@ -144,7 +167,26 @@ const isGameOver = ref(false)
 const activeGame = ref('snake')
 const score = ref(0)
 
-// 全域鍵盤與 UI 按鈕長按狀態追蹤器
+const POPUP_TRIGGER_SCORES = {
+  snake: 40,      // 貪吃蛇：40 分
+  breakout: 60,  // 打磚塊：60 分
+  shooter: 200   // 太空射擊：200 分
+}
+
+const showPopupImage = ref(false)
+const hasTriggeredPopup = ref(false)
+
+const checkScorePopup = () => {
+  const targetScore = POPUP_TRIGGER_SCORES[activeGame.value] || 50
+  if (score.value >= targetScore && !hasTriggeredPopup.value) {
+    hasTriggeredPopup.value = true
+    showPopupImage.value = true
+    confetti({ particleCount: 120, spread: 90, origin: { y: 0.5 } })
+    triggerGameOver()
+  }
+}
+
+// 鍵盤與 UI 按鈕長按狀態追蹤
 const keysHeld = {}
 const btnState = ref({ left: false, right: false, fire: false })
 
@@ -184,6 +226,8 @@ const open = (gameType = 'snake') => {
   isOpen.value = true
   isGameOver.value = false
   isPlaying.value = false
+  showPopupImage.value = false
+  hasTriggeredPopup.value = false
   clearInputState()
   nextTick(() => {
     if (canvasRef.value) {
@@ -195,6 +239,7 @@ const open = (gameType = 'snake') => {
 
 const close = () => {
   isOpen.value = false
+  showPopupImage.value = false
   stopGameLoop()
   clearInputState()
 }
@@ -206,6 +251,8 @@ const switchGame = (gameType) => {
   score.value = 0
   isGameOver.value = false
   isPlaying.value = false
+  showPopupImage.value = false
+  hasTriggeredPopup.value = false
   nextTick(() => drawStaticBackground())
 }
 
@@ -232,6 +279,8 @@ const startGame = () => {
   score.value = 0
   isGameOver.value = false
   isPlaying.value = true
+  showPopupImage.value = false
+  hasTriggeredPopup.value = false
   clearInputState()
 
   if (activeGame.value === 'snake') initSnake()
@@ -252,7 +301,6 @@ const updateHighScore = () => {
   if (score.value > highScores.value[activeGame.value]) {
     highScores.value[activeGame.value] = score.value
     localStorage.setItem(`hs_${activeGame.value}`, score.value.toString())
-    confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } })
   }
 }
 
@@ -275,18 +323,39 @@ const drawStaticBackground = () => {
   }
 }
 
+// 繪製圓角矩形工具函式
+const drawRoundedRect = (ctx, x, y, width, height, radius) => {
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.lineTo(x + width - radius, y)
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
+  ctx.lineTo(x + width, y + height - radius)
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+  ctx.lineTo(x + radius, y + height)
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
+  ctx.lineTo(x, y + radius)
+  ctx.quadraticCurveTo(x, y, x + radius, y)
+  ctx.closePath()
+  ctx.fill()
+}
+
 // -----------------------------------------------------------------
-// 1. 貪吃蛇
+// 1. 貪吃蛇 (60 FPS 內插平滑滑行 + 指令緩衝佇列)
 // -----------------------------------------------------------------
 let snake = []
+let prevSnake = []
+let dirQueue = []
 let snakeDir = 'RIGHT'
-let snakeNextDir = 'RIGHT'
 let food = { x: 0, y: 0 }
 let snakeTimer = 0
+const SNAKE_STEP_SPEED = 95 // 步數速度 (ms)
 
 const initSnake = () => {
   snake = [{ x: 5, y: 7 }, { x: 4, y: 7 }, { x: 3, y: 7 }]
-  snakeDir = 'RIGHT'; snakeNextDir = 'RIGHT'
+  prevSnake = JSON.parse(JSON.stringify(snake))
+  snakeDir = 'RIGHT'
+  dirQueue = []
+  snakeTimer = 0
   generateSnakeFood()
 }
 
@@ -295,18 +364,30 @@ const generateSnakeFood = () => {
   if (snake.some(s => s.x === food.x && s.y === food.y)) generateSnakeFood()
 }
 
+// 指令緩衝佇列 (防急速連續按鍵吃字與自殺)
 const handleSnakeDir = (dir) => {
-  if (dir === 'UP' && snakeDir !== 'DOWN') snakeNextDir = 'UP'
-  if (dir === 'DOWN' && snakeDir !== 'UP') snakeNextDir = 'DOWN'
-  if (dir === 'LEFT' && snakeDir !== 'RIGHT') snakeNextDir = 'LEFT'
-  if (dir === 'RIGHT' && snakeDir !== 'LEFT') snakeNextDir = 'RIGHT'
+  const lastDir = dirQueue.length > 0 ? dirQueue[dirQueue.length - 1] : snakeDir
+  if (dir === 'UP' && lastDir !== 'DOWN' && lastDir !== 'UP') dirQueue.push('UP')
+  if (dir === 'DOWN' && lastDir !== 'UP' && lastDir !== 'DOWN') dirQueue.push('DOWN')
+  if (dir === 'LEFT' && lastDir !== 'RIGHT' && lastDir !== 'LEFT') dirQueue.push('LEFT')
+  if (dir === 'RIGHT' && lastDir !== 'LEFT' && lastDir !== 'RIGHT') dirQueue.push('RIGHT')
+  if (dirQueue.length > 2) dirQueue.shift()
 }
 
 const updateSnake = (deltaTime) => {
   snakeTimer += deltaTime || 0
-  if (snakeTimer > 110) {
-    snakeTimer = 0
-    snakeDir = snakeNextDir
+
+  if (snakeTimer >= SNAKE_STEP_SPEED) {
+    snakeTimer -= SNAKE_STEP_SPEED
+    
+    // 取出緩衝區中的下一個方向
+    if (dirQueue.length > 0) {
+      snakeDir = dirQueue.shift()
+    }
+
+    // 複製目前座標作為內插起點
+    prevSnake = JSON.parse(JSON.stringify(snake))
+
     const head = { ...snake[0] }
     if (snakeDir === 'UP') head.y -= 1
     if (snakeDir === 'DOWN') head.y += 1
@@ -321,26 +402,46 @@ const updateSnake = (deltaTime) => {
     snake.unshift(head)
     if (head.x === food.x && head.y === food.y) {
       score.value += 10
+      checkScorePopup()
       generateSnakeFood()
+      prevSnake.push({ ...prevSnake[prevSnake.length - 1] })
     } else {
       snake.pop()
     }
   }
 
-  ctx.fillStyle = '#00f2fe'; ctx.shadowColor = '#00f2fe'; ctx.shadowBlur = 8
-  ctx.fillRect(food.x * 20 + 2, food.y * 20 + 2, 16, 16)
+  // 計算 60FPS 平滑過渡比例 (0.0 ~ 1.0)
+  const progress = Math.min(1, snakeTimer / SNAKE_STEP_SPEED)
 
+  // 繪製霓虹食物 (帶脈衝效果)
+  const pulse = Math.sin(performance.now() / 150) * 1.5
+  ctx.fillStyle = '#00f2fe'; ctx.shadowColor = '#00f2fe'; ctx.shadowBlur = 10
+  ctx.beginPath()
+  ctx.arc(food.x * 20 + 10, food.y * 20 + 10, 7 + pulse, 0, Math.PI * 2)
+  ctx.fill()
+
+  // 繪製平滑滑行蛇身
   snake.forEach((s, idx) => {
+    const p = prevSnake[idx] || s
+    const interpX = p.x + (s.x - p.x) * progress
+    const interpY = p.y + (s.y - p.y) * progress
+
+    const size = idx === 0 ? 18 : 16
+    const offset = (20 - size) / 2
+    const posX = interpX * 20 + offset
+    const posY = interpY * 20 + offset
+
     ctx.fillStyle = idx === 0 ? '#38bdf8' : '#a855f7'
     ctx.shadowColor = idx === 0 ? '#38bdf8' : '#a855f7'
-    ctx.shadowBlur = idx === 0 ? 6 : 2
-    ctx.fillRect(s.x * 20 + 1, s.y * 20 + 1, 18, 18)
+    ctx.shadowBlur = idx === 0 ? 10 : 4
+
+    drawRoundedRect(ctx, posX, posY, size, size, 5)
   })
   ctx.shadowBlur = 0
 }
 
 // -----------------------------------------------------------------
-// 2. 打磚塊 (絲滑物理速度 5.5px/frame)
+// 2. 打磚塊
 // -----------------------------------------------------------------
 let paddle = { x: 120, w: 60, h: 8 }
 let ball = { x: 150, y: 220, dx: 2.5, dy: -2.5, r: 4 }
@@ -374,7 +475,6 @@ const createParticles = (x, y, color) => {
 }
 
 const updateBreakout = () => {
-  // 每幀平滑向量計算
   if (keysHeld['ArrowLeft'] || keysHeld['KeyA'] || btnState.value.left) {
     paddle.x = Math.max(0, paddle.x - PADDLE_SPEED)
   }
@@ -399,6 +499,7 @@ const updateBreakout = () => {
       b.active = false
       ball.dy *= -1
       score.value += 15
+      checkScorePopup()
       createParticles(b.x + b.w / 2, b.y + b.h / 2, b.color)
     }
   })
@@ -429,7 +530,7 @@ const updateBreakout = () => {
 }
 
 // -----------------------------------------------------------------
-// 3. 太空射擊 (絲滑平移 4.5px/frame + 自動連射 CDP 冷卻)
+// 3. 太空射擊
 // -----------------------------------------------------------------
 let player = { x: 140, y: 260, w: 20, h: 20 }
 let bullets = []
@@ -445,7 +546,6 @@ const initShooter = () => {
 }
 
 const updateShooter = () => {
-  // 絲滑戰機平移
   if (keysHeld['ArrowLeft'] || keysHeld['KeyA'] || btnState.value.left) {
     player.x = Math.max(0, player.x - SHIP_SPEED)
   }
@@ -453,7 +553,6 @@ const updateShooter = () => {
     player.x = Math.min(300 - player.w, player.x + SHIP_SPEED)
   }
 
-  // 絲滑按住自動連射 (8 幀/發，約每秒 7.5 發)
   if (fireCooldown > 0) fireCooldown--
   const isFiring = keysHeld['Space'] || keysHeld['KeyW'] || keysHeld['ArrowUp'] || btnState.value.fire
   if (isFiring && fireCooldown <= 0) {
@@ -485,6 +584,7 @@ const updateShooter = () => {
         enemies.splice(eIdx, 1)
         bullets.splice(bIdx, 1)
         score.value += 20
+        checkScorePopup()
       }
     })
   })
@@ -514,7 +614,6 @@ const updateShooter = () => {
   ctx.shadowBlur = 0
 }
 
-// 全域 KeyState 監聽器
 const handleKeyDown = (e) => {
   if (!isOpen.value) return
   if (e.key === 'Escape') close()
@@ -525,7 +624,6 @@ const handleKeyDown = (e) => {
 
   keysHeld[e.code] = true
 
-  // 貪吃蛇屬於網格轉向，保留單次觸發
   if (activeGame.value === 'snake') {
     if (['ArrowUp', 'KeyW'].includes(e.code)) handleSnakeDir('UP')
     if (['ArrowDown', 'KeyS'].includes(e.code)) handleSnakeDir('DOWN')
@@ -555,4 +653,9 @@ defineExpose({ open })
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.pop-enter-active { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.pop-leave-active { transition: all 0.25s ease-in; }
+.pop-enter-from { opacity: 0; transform: scale(0.3) rotate(-5deg); }
+.pop-leave-to { opacity: 0; transform: scale(1.1); }
 </style>
