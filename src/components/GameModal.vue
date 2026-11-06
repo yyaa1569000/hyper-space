@@ -40,37 +40,51 @@
             </button>
           </div>
 
-          <!-- 分數顯示儀表板 -->
+          <!-- 分數顯示儀表板 (打磚塊會額外顯示關卡數) -->
           <div class="px-6 py-2 bg-slate-950/40 flex justify-between items-center border-b border-slate-800/60 text-xs">
-            <div class="text-slate-400">
-              SCORE: <span class="text-cyan-400 font-bold text-base ml-1">{{ score }}</span>
+            <div class="text-slate-400 flex items-center gap-3">
+              <span>SCORE: <span class="text-cyan-400 font-bold text-base ml-1">{{ score }}</span></span>
+              <span v-if="activeGame === 'breakout'" class="text-amber-400 font-bold bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30">
+                LV.{{ breakoutLevel }}
+              </span>
             </div>
             <div class="text-slate-400">
               HIGH SCORE: <span class="text-purple-400 font-bold text-base ml-1">{{ currentHighScore }}</span>
             </div>
           </div>
 
-          <!-- 遊戲 Canvas 畫布 -->
+          <!-- 遊戲 Canvas 畫布與訊息提示 -->
           <div class="p-4 flex justify-center bg-slate-950/90 relative overflow-hidden">
             <canvas ref="canvasRef" width="300" height="300" class="border border-slate-800 rounded-lg bg-slate-950"></canvas>
 
-            <!-- 遮罩：未開始 / Game Over -->
+            <!-- 💥 打磚塊過關提示橫幅 (Banner) -->
+            <Transition name="fade">
+              <div 
+                v-if="showLevelNotice" 
+                class="absolute top-8 left-1/2 -translate-x-1/2 z-30 bg-cyan-500/90 text-slate-950 font-bold text-xs px-4 py-2 rounded-full shadow-lg backdrop-blur-sm border border-cyan-300 animate-bounce text-center whitespace-nowrap"
+              >
+                {{ levelNoticeText }}
+              </div>
+            </Transition>
+
+            <!-- 遮罩：未開始 / Game Over / 勝利通關 -->
             <div 
               v-if="!isPlaying" 
               class="absolute inset-0 m-4 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg text-center p-6 z-20"
             >
-              <p v-if="isGameOver" class="text-red-400 font-bold text-xl mb-2">GAME OVER</p>
+              <p v-if="isVictory" class="text-emerald-400 font-bold text-xl mb-2">🎉 恭喜通關！</p>
+              <p v-else-if="isGameOver" class="text-red-400 font-bold text-xl mb-2">GAME OVER</p>
               <p v-else class="text-cyan-400 font-bold text-xl mb-2">{{ gameTitle }}</p>
 
               <p class="text-slate-400 text-xs mb-6 max-w-xs leading-relaxed">
-                {{ gameInstructions }}
+                {{ isVictory ? victoryMessage : gameInstructions }}
               </p>
 
               <button 
                 @click="startGame"
                 class="px-6 py-2.5 rounded-lg bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 transition-colors shadow-lg shadow-cyan-500/20 text-sm"
               >
-                {{ isGameOver ? '重新開始' : '開始遊戲' }}
+                {{ (isGameOver || isVictory) ? '重新開始' : '開始遊戲' }}
               </button>
             </div>
           </div>
@@ -129,28 +143,6 @@
             </div>
           </div>
 
-          <!-- 💥 全覆蓋滿版巨型彩蛋 (跳出時同步結束遊戲) -->
-          <Transition name="pop">
-            <div 
-              v-if="showPopupImage" 
-              class="absolute inset-0 flex flex-col items-center justify-between bg-slate-950/95 backdrop-blur-md z-50 cursor-pointer p-4 pt-8 pb-5"
-              @click="showPopupImage = false"
-            >
-              <div class="relative flex-1 flex items-center justify-center w-full min-h-0">
-                <div class="absolute w-72 h-72 bg-cyan-500/35 rounded-full blur-3xl animate-pulse"></div>
-                <img 
-                  src="/popup.png" 
-                  alt="Surprise!" 
-                  class="w-full h-full max-h-[310px] object-contain relative z-10 drop-shadow-[0_0_35px_rgba(0,242,254,0.9)] animate-pulse"
-                />
-              </div>
-
-              <span class="mt-2 text-cyan-300 font-bold text-xs tracking-wider bg-slate-950/95 px-4 py-2 rounded-full border border-cyan-500/80 shadow-2xl relative z-20 text-center shrink-0">
-                ⚠️ 系統提示：別再玩了，快發 Offer 給這個優秀的工程師！(點擊關閉)
-              </span>
-            </div>
-          </Transition>
-
         </div>
       </div>
     </Transition>
@@ -164,27 +156,16 @@ import confetti from 'canvas-confetti'
 const isOpen = ref(false)
 const isPlaying = ref(false)
 const isGameOver = ref(false)
+const isVictory = ref(false)
+const victoryMessage = ref('')
 const activeGame = ref('snake')
 const score = ref(0)
 
-const POPUP_TRIGGER_SCORES = {
-  snake: 40,      // 貪吃蛇：40 分
-  breakout: 60,  // 打磚塊：60 分
-  shooter: 200   // 太空射擊：200 分
-}
-
-const showPopupImage = ref(false)
-const hasTriggeredPopup = ref(false)
-
-const checkScorePopup = () => {
-  const targetScore = POPUP_TRIGGER_SCORES[activeGame.value] || 50
-  if (score.value >= targetScore && !hasTriggeredPopup.value) {
-    hasTriggeredPopup.value = true
-    showPopupImage.value = true
-    confetti({ particleCount: 120, spread: 90, origin: { y: 0.5 } })
-    triggerGameOver()
-  }
-}
+// 打磚塊關卡與提示
+const breakoutLevel = ref(1)
+const showLevelNotice = ref(false)
+const levelNoticeText = ref('')
+let levelNoticeTimer = null
 
 // 鍵盤與 UI 按鈕長按狀態追蹤
 const keysHeld = {}
@@ -216,8 +197,8 @@ const gameTitle = computed(() => {
 })
 
 const gameInstructions = computed(() => {
-  if (activeGame.value === 'snake') return '使用方向鍵 / WASD 控制貪吃蛇吃掉能量核心取得高分。'
-  if (activeGame.value === 'breakout') return '長按方向鍵流暢移動擋板，反彈光球擊碎磚塊！'
+  if (activeGame.value === 'snake') return '使用方向鍵 / WASD 控制貪吃蛇吃掉能量核心。填滿地圖即算過關！'
+  if (activeGame.value === 'breakout') return '長按方向鍵流暢移動擋板，打完所有磚塊即可晉級下一關！'
   return '長按方向鍵滑順平移，按住空白鍵或發射鈕可持續自動連射。'
 })
 
@@ -225,9 +206,9 @@ const open = (gameType = 'snake') => {
   activeGame.value = gameType
   isOpen.value = true
   isGameOver.value = false
+  isVictory.value = false
   isPlaying.value = false
-  showPopupImage.value = false
-  hasTriggeredPopup.value = false
+  showLevelNotice.value = false
   clearInputState()
   nextTick(() => {
     if (canvasRef.value) {
@@ -239,7 +220,7 @@ const open = (gameType = 'snake') => {
 
 const close = () => {
   isOpen.value = false
-  showPopupImage.value = false
+  showLevelNotice.value = false
   stopGameLoop()
   clearInputState()
 }
@@ -249,10 +230,11 @@ const switchGame = (gameType) => {
   clearInputState()
   activeGame.value = gameType
   score.value = 0
+  breakoutLevel.value = 1
   isGameOver.value = false
+  isVictory.value = false
   isPlaying.value = false
-  showPopupImage.value = false
-  hasTriggeredPopup.value = false
+  showLevelNotice.value = false
   nextTick(() => drawStaticBackground())
 }
 
@@ -277,10 +259,11 @@ const gameLoop = (timestamp) => {
 
 const startGame = () => {
   score.value = 0
+  breakoutLevel.value = 1
   isGameOver.value = false
+  isVictory.value = false
   isPlaying.value = true
-  showPopupImage.value = false
-  hasTriggeredPopup.value = false
+  showLevelNotice.value = false
   clearInputState()
 
   if (activeGame.value === 'snake') initSnake()
@@ -309,6 +292,15 @@ const triggerGameOver = () => {
   isGameOver.value = true
   clearInputState()
   updateHighScore()
+}
+
+const triggerVictory = (msg) => {
+  stopGameLoop()
+  isVictory.value = true
+  victoryMessage.value = msg
+  clearInputState()
+  updateHighScore()
+  confetti({ particleCount: 150, spread: 100, origin: { y: 0.5 } })
 }
 
 const drawStaticBackground = () => {
@@ -340,7 +332,7 @@ const drawRoundedRect = (ctx, x, y, width, height, radius) => {
 }
 
 // -----------------------------------------------------------------
-// 1. 貪吃蛇 (60 FPS 內插平滑滑行 + 指令緩衝佇列)
+// 1. 貪吃蛇 (120ms/格 步頻 + 沒路走自動過關)
 // -----------------------------------------------------------------
 let snake = []
 let prevSnake = []
@@ -348,7 +340,7 @@ let dirQueue = []
 let snakeDir = 'RIGHT'
 let food = { x: 0, y: 0 }
 let snakeTimer = 0
-const SNAKE_STEP_SPEED = 95 // 步數速度 (ms)
+const SNAKE_STEP_SPEED = 120 // 🎯 貪吃蛇前進速度：改為 120ms / 格
 
 const initSnake = () => {
   snake = [{ x: 5, y: 7 }, { x: 4, y: 7 }, { x: 3, y: 7 }]
@@ -360,11 +352,30 @@ const initSnake = () => {
 }
 
 const generateSnakeFood = () => {
-  food = { x: Math.floor(Math.random() * 15), y: Math.floor(Math.random() * 15) }
-  if (snake.some(s => s.x === food.x && s.y === food.y)) generateSnakeFood()
+  // 檢查是否所有格子 (15x15 = 225) 都被填滿了 (沒路走 = 通關)
+  if (snake.length >= 225) {
+    triggerVictory('你太強了！貪吃蛇已填滿整個地圖大滿貫通關！')
+    return
+  }
+
+  const emptyCells = []
+  for (let x = 0; x < 15; x++) {
+    for (let y = 0; y < 15; y++) {
+      if (!snake.some(s => s.x === x && s.y === y)) {
+        emptyCells.push({ x, y })
+      }
+    }
+  }
+
+  // 沒空位產生食物 -> 判定為完美通關！
+  if (emptyCells.length === 0) {
+    triggerVictory('完美通關！貪吃蛇已無路可走（地圖全滿）！')
+    return
+  }
+
+  food = emptyCells[Math.floor(Math.random() * emptyCells.length)]
 }
 
-// 指令緩衝佇列 (防急速連續按鍵吃字與自殺)
 const handleSnakeDir = (dir) => {
   const lastDir = dirQueue.length > 0 ? dirQueue[dirQueue.length - 1] : snakeDir
   if (dir === 'UP' && lastDir !== 'DOWN' && lastDir !== 'UP') dirQueue.push('UP')
@@ -380,12 +391,10 @@ const updateSnake = (deltaTime) => {
   if (snakeTimer >= SNAKE_STEP_SPEED) {
     snakeTimer -= SNAKE_STEP_SPEED
     
-    // 取出緩衝區中的下一個方向
     if (dirQueue.length > 0) {
       snakeDir = dirQueue.shift()
     }
 
-    // 複製目前座標作為內插起點
     prevSnake = JSON.parse(JSON.stringify(snake))
 
     const head = { ...snake[0] }
@@ -402,7 +411,6 @@ const updateSnake = (deltaTime) => {
     snake.unshift(head)
     if (head.x === food.x && head.y === food.y) {
       score.value += 10
-      checkScorePopup()
       generateSnakeFood()
       prevSnake.push({ ...prevSnake[prevSnake.length - 1] })
     } else {
@@ -410,17 +418,14 @@ const updateSnake = (deltaTime) => {
     }
   }
 
-  // 計算 60FPS 平滑過渡比例 (0.0 ~ 1.0)
   const progress = Math.min(1, snakeTimer / SNAKE_STEP_SPEED)
 
-  // 繪製霓虹食物 (帶脈衝效果)
   const pulse = Math.sin(performance.now() / 150) * 1.5
   ctx.fillStyle = '#00f2fe'; ctx.shadowColor = '#00f2fe'; ctx.shadowBlur = 10
   ctx.beginPath()
   ctx.arc(food.x * 20 + 10, food.y * 20 + 10, 7 + pulse, 0, Math.PI * 2)
   ctx.fill()
 
-  // 繪製平滑滑行蛇身
   snake.forEach((s, idx) => {
     const p = prevSnake[idx] || s
     const interpX = p.x + (s.x - p.x) * progress
@@ -441,7 +446,7 @@ const updateSnake = (deltaTime) => {
 }
 
 // -----------------------------------------------------------------
-// 2. 打磚塊
+// 2. 打磚塊 (打完磚塊自動進入下一關 + 球速提升 20%)
 // -----------------------------------------------------------------
 let paddle = { x: 120, w: 60, h: 8 }
 let ball = { x: 150, y: 220, dx: 2.5, dy: -2.5, r: 4 }
@@ -450,8 +455,24 @@ let particles = []
 const PADDLE_SPEED = 5.5
 
 const initBreakout = () => {
+  breakoutLevel.value = 1
   paddle = { x: 120, w: 60, h: 8 }
-  ball = { x: 150, y: 220, dx: 2.5, dy: -2.5, r: 4 }
+  setupBreakoutLevel()
+}
+
+// 依關卡數設定磚塊與球速
+const setupBreakoutLevel = () => {
+  const speedMultiplier = 1 + (breakoutLevel.value - 1) * 0.2 // 每關球速 +20%
+  const baseSpeed = 2.5 * speedMultiplier
+
+  ball = { 
+    x: paddle.x + paddle.w / 2, 
+    y: 220, 
+    dx: (Math.random() > 0.5 ? 1 : -1) * baseSpeed, 
+    dy: -baseSpeed, 
+    r: 4 
+  }
+
   bricks = []
   particles = []
   const colors = ['#f43f5e', '#a855f7', '#38bdf8', '#10b981']
@@ -491,7 +512,9 @@ const updateBreakout = () => {
 
   if (ball.y + ball.r >= 270 && ball.x >= paddle.x && ball.x <= paddle.x + paddle.w) {
     ball.dy = -Math.abs(ball.dy)
-    ball.dx = ((ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2)) * 3.5
+    const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy)
+    const hitRatio = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2)
+    ball.dx = hitRatio * (speed * 0.9)
   }
 
   bricks.forEach(b => {
@@ -499,10 +522,26 @@ const updateBreakout = () => {
       b.active = false
       ball.dy *= -1
       score.value += 15
-      checkScorePopup()
       createParticles(b.x + b.w / 2, b.y + b.h / 2, b.color)
     }
   })
+
+  // 🎯 檢查是否清空所有磚塊 (進入下一關)
+  if (bricks.length > 0 && bricks.every(b => !b.active)) {
+    breakoutLevel.value++
+    score.value += 100 // 通關加分
+    
+    levelNoticeText.value = `⚡ 進入第 ${breakoutLevel.value} 關！(球速已提升)`
+    showLevelNotice.value = true
+    confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } })
+
+    if (levelNoticeTimer) clearTimeout(levelNoticeTimer)
+    levelNoticeTimer = setTimeout(() => {
+      showLevelNotice.value = false
+    }, 2200)
+
+    setupBreakoutLevel()
+  }
 
   ctx.fillStyle = '#00f2fe'; ctx.shadowColor = '#00f2fe'; ctx.shadowBlur = 8
   ctx.fillRect(paddle.x, 270, paddle.w, paddle.h)
@@ -530,7 +569,7 @@ const updateBreakout = () => {
 }
 
 // -----------------------------------------------------------------
-// 3. 太空射擊
+// 3. 太空射擊 (保持原速不變)
 // -----------------------------------------------------------------
 let player = { x: 140, y: 260, w: 20, h: 20 }
 let bullets = []
@@ -584,7 +623,6 @@ const updateShooter = () => {
         enemies.splice(eIdx, 1)
         bullets.splice(bIdx, 1)
         score.value += 20
-        checkScorePopup()
       }
     })
   })
@@ -653,9 +691,4 @@ defineExpose({ open })
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
-
-.pop-enter-active { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-.pop-leave-active { transition: all 0.25s ease-in; }
-.pop-enter-from { opacity: 0; transform: scale(0.3) rotate(-5deg); }
-.pop-leave-to { opacity: 0; transform: scale(1.1); }
 </style>
